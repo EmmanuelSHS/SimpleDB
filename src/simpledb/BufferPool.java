@@ -201,7 +201,8 @@ public class BufferPool {
     		TransactionId ptid = p.isDirty();
     		if (ptid != null && ptid.equals(tid)) {
     			p.markDirty(false, null);
-    			p.setBeforeImage();
+    			_bufferPages.put(pid, p.getBeforeImage());
+    			//p.setBeforeImage();
     		}
     	}
     }
@@ -279,6 +280,7 @@ public class BufferPool {
     */
     public synchronized void discardPage(PageId pid) {
         _bufferPages.remove(pid);
+        _currPages.decrementAndGet();
     }
 
     /**
@@ -291,6 +293,7 @@ public class BufferPool {
         if (p != null && p.isDirty() != null) {
         	Database.getLogFile().logWrite(p.isDirty(), p.getBeforeImage(), p);
         	Database.getLogFile().force();
+        	
         	Database.getCatalog().getDbFile(pid.getTableId()).writePage(p);
         	p.markDirty(false, null);
         }
@@ -299,8 +302,17 @@ public class BufferPool {
     /** Write all pages of the specified transaction to disk.
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2|lab3
+        for (PageId pid : _bufferPages.keySet()) {
+        	Page p = _bufferPages.get(pid);
+            TransactionId pagetid = p.isDirty();
+            if (pagetid != null && pagetid.equals(tid)) {
+                flushPage(pid);
+                // use current page contents as the before-image
+                // for the next transaction that modifies this page.
+                p.setBeforeImage();
+                p.markDirty(false, null);
+            }
+        }
     }
     
     /**
