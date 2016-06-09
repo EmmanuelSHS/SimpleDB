@@ -466,7 +466,35 @@ public class LogFile {
         synchronized (Database.getBufferPool()) {
             synchronized(this) {
                 preAppend();
-                // some code goes here
+                
+                Long firstLogOffset = tidToFirstLogRecord.get(tid.getId());
+                if (firstLogOffset == null){ // Long is able to have null
+                	throw new NoSuchElementException("this transaction not exist" + tid.getId());
+                }
+                raf.seek(firstLogOffset);
+                long endlength = raf.length();
+                while (raf.getFilePointer() < endlength) {
+                	int record_type = raf.readInt();
+                    long record_tid = raf.readLong();
+                    
+                    switch (record_type) {
+                    case UPDATE_RECORD:
+                    	Page before = readPageData(raf);
+                    	Page after = readPageData(raf); // have to offset
+                    	if (record_tid == tid.getId()) {
+                    		PageId pid = before.getId();
+                    		Database.getCatalog().getDbFile(pid.getTableId()).writePage(before);
+                    		Database.getBufferPool().discardPage(pid);
+                    	}
+                    	break;
+                    case CHECKPOINT_RECORD:
+                    	// if checkpoint, skip
+                    	int currLogType = raf.readInt();
+                    	raf.skipBytes(currLogType * 2 * LONG_SIZE);
+                    	break;
+                    }
+                    raf.readLong(); // skip offset
+                }
             }
         }
     }
@@ -493,11 +521,69 @@ public class LogFile {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
                 recoveryUndecided = false;
-                // some code goes here
+                
+                Set<Long> loser_transaction = new HashSet<Long>();
+                Map<PageId, TransactionOffset> page_to_transaction = new HashMap<PageId, TransactionOffset>();
+                
+                raf.seek(LONG_SIZE);
+                long endraf = raf.length();
+                while (raf.getFilePointer() < endraf) {
+                	int record_type = raf.readInt();
+                	long record_tid = raf.readLong();
+                	
+                	switch (record_type) {
+                	case COMMIT_RECORD:
+                		loser_transaction.remove(record_tid);
+                		raf.readLong(); // offset
+                		break;
+                	case UPDATE_RECORD:
+                		// redo
+                        Page before = readPageData(raf);
+                        Page after = readPageData(raf);
+                        PageId pid = after.getId();
+                        Database.getCatalog().getDbFile(pid.getTableId()).writePage(after);
+                        long offset = raf.readLong();
+                        page_to_transaction.put(pid, new TransactionOffset(record_tid, offset));
+                        break;
+                	case ABORT_RECORD:
+                	case BEGIN_RECORD:
+                		loser_transaction.add(record_tid);
+                		raf.readLong();
+                		break;
+                	case CHECKPOINT_RECORD:
+                		int tcount = raf.readInt();
+                        for (int i = 0; i < tcount; i++) {
+                            long tid = raf.readLong();
+                            loser_transaction.add(tid);
+                            raf.readLong();
+                        }
+                        raf.readLong();
+                        break;
+                	}	
+                }
+                
+                // redo
+                for (TransactionOffset tos : page_to_transaction.values()) {
+                	if (loser_transaction.contains(tos.transaction)) {
+                		raf.seek(tos.offset + INT_SIZE + LONG_SIZE);
+                		Page before = readPageData(raf);
+                		Database.getCatalog().getDbFile(before.getId().getTableId()).writePage(before);
+                	}
+                }
             }
          }
     }
 
+    private class TransactionOffset {
+    	public Long transaction;
+    	public Long offset;
+    	
+    	public TransactionOffset(Long transaction, Long offset) {
+    		this.transaction = transaction;
+    		this.offset = offset;
+    	}
+    }
+    
     /** Print out a human readable represenation of the log */
     public void print() throws IOException {
         // some code goes here

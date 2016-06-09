@@ -188,7 +188,8 @@ public class BufferPool {
     		if (ptid != null && ptid.equals(tid)) {
     			flushPage(pid);
     			p.markDirty(false, tid);
-    			// ? reset this modified page
+    			// use current page contents as the before-image
+    			// for the next transaction that modifies this page.
     			p.setBeforeImage();
     		}
     	}
@@ -277,8 +278,7 @@ public class BufferPool {
         cache.
     */
     public synchronized void discardPage(PageId pid) {
-        // some code goes here
-        // only necessary for lab5
+        _bufferPages.remove(pid);
     }
 
     /**
@@ -289,6 +289,8 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         Page p = _bufferPages.get(pid);
         if (p != null && p.isDirty() != null) {
+        	Database.getLogFile().logWrite(p.isDirty(), p.getBeforeImage(), p);
+        	Database.getLogFile().force();
         	Database.getCatalog().getDbFile(pid.getTableId()).writePage(p);
         	p.markDirty(false, null);
         }

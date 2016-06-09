@@ -96,6 +96,7 @@ public class HeapPage implements Page {
         return null;
     }
     
+    
     public void setBeforeImage() {
         oldData = getPageData().clone();
     }
