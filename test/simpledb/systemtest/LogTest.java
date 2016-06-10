@@ -283,9 +283,10 @@ public class LogTest extends SimpleDbTestBase {
         // T3 inserts and commit
         // only T1 and T3 data should be there
 
-        doInsert(hf1, 5, -1);
+        // Strange thing, if do insert 5 in the end, will have no wrong
         dontInsert(hf1, 6, -1);
         doInsert(hf1, 7, -1);
+        doInsert(hf1, 5, -1);
 
         Transaction t = new Transaction();
         t.start();
