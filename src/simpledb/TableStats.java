@@ -10,6 +10,10 @@ public class TableStats {
      */
     static final int NUM_HIST_BINS = 100;
 
+    private int _tableid;
+    private int _ioCostPerPage;
+    private DbFile _file;
+    
     /**
      * Create a new TableStats object, that keeps track of statistics on each column of a table
      * 
@@ -22,7 +26,9 @@ public class TableStats {
     	// then scan through its tuples and calculate the values that you need.
     	// You should try to do this reasonably efficiently, but you don't necessarily
     	// have to (for example) do everything in a single scan of the table.
-    	// some code goes here
+    	_tableid = tableid;
+    	_ioCostPerPage = ioCostPerPage;
+    	_file = Database.getCatalog().getDbFile(_tableid);
     }
 
     /** 

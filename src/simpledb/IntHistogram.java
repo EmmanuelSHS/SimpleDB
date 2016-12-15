@@ -109,13 +109,15 @@ public class IntHistogram {
     	int idx = getIdx(v);
     	double res = 0.;
         switch (op) {
-        case LESS_THAN_OR_EQ:
         case EQUALS:
+        	res = (double) _bucket[idx];
+        	break;
+        case LESS_THAN_OR_EQ:
         case GREATER_THAN_OR_EQ:
         	res = (double) _bucket[idx] / getWidth(idx);
         	break;
         case NOT_EQUALS:
-        	return 1.0 - 1.0 / _totn;
+        	return 1.0 - (double) _bucket[idx] / getWidth(idx);
         case LIKE:
         	return 1.0;
         default:
